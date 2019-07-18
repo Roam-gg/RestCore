@@ -1,130 +1,140 @@
 version: 2.1
-executors:
-  docker-publisher:
-    docker:
-      - image: circleci/python:3.7.0
-  tester:
-    docker:
-      - image: circleci/python:3.7.0
 jobs:
   build:
-    executor: docker-publisher
+    docker:
+      - circleci/python:3.6
     steps:
       - checkout
-      - setup_remote_docker
       - restore_cache:
-          keys:
-            - v1-{{ .Branch }}
-          paths:
-            - image.tar
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
-          name: Load Docker image layer cache
+          name: Install python dependencies
           command: |
-            set +o pipefail
-            docker load -i image.tar | true
-      - run:
-          name: Build Docker image
-          command: |
-            docker build --cache-from=$IMAGE_NAME:latest -t $IMAGE_NAME:latest .
-      - run:
-          name: Archive Docker image
-          command: |
-            docker save -o image.tar $IMAGE_NAME
+            python3 -m venv venv
+            . venv/bin/activate
+            make dev
       - save_cache:
-          key: v1-{{ .Branch }}-{{ epoch }}
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
           paths:
-            - image.tar
-      - persist_to_workspace:
-          root: .
-          paths:
-            - ./image.tar
-  publish-latest:
-    executor: docker-publisher
-    steps:
-      - attach_workspace:
-          at: /tmp/workspace
-      - setup_remote_docker
+            - "venv"
       - run:
-          name: Load archived Docker image
-          command: docker load -i /tmp/workspace/image.tar
-      - run:
-          name: Publish Docker Image to Docker Hub
+          name: Run tests
           command: |
-            docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_PASSWORD"
-            docker push $IMAGE_NAME:latest
-  publish-tag:
-    executor: docker-publisher
-    steps:
-      - attach_workspace:
-          at: /tmp/workspace
-      - setup_remote_docker
-      - run:
-          name: Load archived Docker image
-          command: docker load -i /tmp/workspace/image.tar
-      - run:
-          name: Publish Docker Image to Docker Hub
-          command: |
-            docker login -u "$DOCKERHUB_USERNAME" -p "$DOCKERHUB_PASSWORD"
-            docker tag $IMAGE_NAME:latest $IMAGE_NAME:$CIRCLE_TAG
-            docker push $IMAGE_NAME:$CIRCLE_TAG
-            docker push $IMAGE_NAME:latest
-  test:
-    executor: tester
+            . venv/bin/activate
+            make test
+            codecov
+      - store_artifacts:
+          path: htmlcov/
+  test-python-install:
+    parameters:
+      version:
+        type: string
+        defualt: latest
+    docker:
+      - image: circleci/python:<< parameters.version >>
     steps:
       - checkout
-      - setup_remote_docker
-      - attach_workspace:
-          at: /tmp/workspace
+      - restore_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
       - run:
-          name: Load archived Docker image
-          command: docker load -i /tmp/workspace/image.tar
-      - run:
-          name: create test container
+          name: Install python dependencies
           command: |
-            docker create -v "/vol" -w "/vol" --name tester python:3.7-alpine pip install pytest && pytest
-            docker cp $PWD tester:/vol
+            python3 -m venv venv
+            . venv/bin/activate
+            make dev
+      - save_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
+          paths:
+            - "venv"
       - run:
-          name: Start containers
-          command: docker-compose -f tests/docker-compose.yaml up
-      - run:
-          name: Test
+          name: Run tests
           command: |
-            docker start tester
+            . venv/bin/activate
+            make test
+            codecov
+      - store_artifacts:
+          path: htmlcov/
+      - run:
+          name: Smoke test install
+          command: |
+            python --version
+            sudo pip3 install roamrs
+  deploy:
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
+      - run:
+          name: Install python dependencies
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            make dev
+      - save_cache:
+          key: v1-dependency-cache-{{ checksum "setup.py" }}-{{ checksum "Makefile" }}
+          paths:
+            - "venv"
+      - run:
+          name: Verify git tag vs. version
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            python setup.py verify
+      - run:
+          name: Init .pypirc
+          command: |
+            echo -e "[pypi]" >> ~/.pypirc
+            echo -e "username = $PYPI_USERNAME" >> ~/.pypirc
+            echo -e "password = $PYPI_password" >> ~/.pypirc
+      - run:
+          name: Create package
+          command: |
+            make package
+      - run:
+          name: Upload to PyPI
+          command: |
+            . venv/bin/activate
+            twine upload dist/*
 workflows:
   version: 2
-  build-nightly:
-    jobs:
-      - build:
-          filters:
-             branches:
-               only: develop
-      - publish-latest:
-          context: DockerHub
-          requires:
-            - build
-          filters:
-            branches:
-              only: develop
   build-tags:
     jobs:
       - build:
-          filters:
+          filter:
             tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
-      - publish-tag:
-          context: DockerHub
+              only: /.*/
+      - deploy:
+          context: PyPI
           requires:
             - build
           filters:
-             tags:
-              only: /^v.*/
-             branches:
+            tags:
+              only: /[0-9]+(\.[0-9]+)*/
+            branches:
               ignore: /.*/
-  build-pulls:
-    jobs:
+  build-develop:
       - build:
-           filters:
-             branches:
-               only: /^pull.+/
+          filter:
+            branches:
+              only: /develop/
+      - test-python-install:
+          version: "3.6"
+          requires:
+            - build
+      - test-python-install:
+          version: "3.7"
+          requires:
+            - build
+  build-pulls:
+      - build:
+          filter:
+            branches:
+              only: /^pull.+/
+      - test-python-install:
+          version: "3.6"
+          requires:
+            - build
+      - test-python-install:
+          verison: "3.7"
+          requires:
+            - build
