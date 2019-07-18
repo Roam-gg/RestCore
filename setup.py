@@ -40,6 +40,7 @@ setup(
             "Programming Language :: Python :: 3 :: Only",
         ],
         keywords='roamrs roam.gg roam rest api',
+        packages=['roamrs'],
         package_dir = {'': 'src'},
         install_requires=[
             'aiohttp',

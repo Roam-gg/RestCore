@@ -57,8 +57,9 @@ jobs:
       - run:
           name: Smoke test install
           command: |
+            make package
             python --version
-            sudo pip3 install roamrs
+            sudo pip3 install dist/roamrs*
   deploy:
     docker:
       - image: circleci/python:3.6

@@ -4,7 +4,7 @@ import re
 
 from enum import Enum
 from typing import List, Callable, Dict
-from roamrs._jwt import JWTService, TokenInvalid
+from .pyjwt import JWTService, TokenInvalid
 
 
 __all__ = (
