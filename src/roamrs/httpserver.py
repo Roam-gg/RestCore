@@ -16,6 +16,7 @@ __all__ = (
     'HTTPServer'
 )
 
+
 def check_auth(request, jwt_service) -> bool:
     token = request.headers.get('Authorization')
     if not token:
@@ -26,6 +27,7 @@ def check_auth(request, jwt_service) -> bool:
         return False
     else:
         return True
+
 
 class HandlerExists(Exception):
     def __init__(self, path, method, old_handler, new_handler):
@@ -53,29 +55,60 @@ class Method(Enum):
 
 
 class Route(object):
-    __slots__ = ('path', 'handlers', 'children')
+    __slots__ = ('path', 'handlers', 'children', 'variable', 'variable_child')
 
     def __init__(self, path):
-        self.path = path
+        if path != '':
+            ROUTE_PATTERN = re.compile(r'([A-Za-z0-9]+)|{([A-Za-z0-9.\-_]+)}')
+            match = ROUTE_PATTERN.match(path)
+            term, var = match.groups()
+            if term is not None:
+                self.path = term
+                self.variable = False
+            else:
+                self.path = var
+                self.variable = True
+        else:
+            self.path = path
+            self.variable = False
         self.handlers = {i: None for i in Method}
         self.children = []
+        self.variable_child = None
 
-    async def __call__(
-            self, method: Method, request: web.BaseRequest,
-            services: List[object],
-            *args, **kwargs):
-        if self.handlers[method] is None:
+    async def __call__(self, path_list: List[str], method: Method, request: web.BaseRequest, services: List[object], *args, **kwargs):
+        url_data = kwargs.get('url_data', {})
+        if path_list == []:
+            if self.handlers[method]:
+                return await self.handlers[method](request, services, *args, **kwargs)
+            else:
+                raise web.HTTPNotFound()
+        for child in self.children:
+            if path_list[0] == child.path:
+                return await child(path_list[1:], method, request, services, *args, **kwargs)
+        if self.variable_child:
+            url_data[self.variable_child.path] = path_list[0]
+            kwargs.update({'url_data': url_data})
+            return await self.variable_child(path_list[1:], method, request, services, *args, **kwargs)
+        else:
             raise web.HTTPNotFound()
-        return await self.handlers[method](request, services, *args, **kwargs)
 
     def add_route(self, path_list: List[str]) -> None:
         if path_list == []:
-            return None
+            return self
         for child in self.children:
             if child.path == path_list[0]:
                 return child.add_route(path_list[1:])
+        if self.variable_child and self.variable_child.path == path_list[0].strip(
+                '{}'):
+            return self.variable_child.add_route(path_list[1:])
         new_child = Route(path_list[0])
-        self.children.append(new_child)
+        if new_child.variable:
+            if not self.variable_child:
+                self.variable_child = new_child
+            else:
+                raise ValueError('Route already has a variable child')
+        else:
+            self.children.append(new_child)
         return new_child.add_route(path_list[1:])
 
     def add_handler(self, method: Method, handler: Callable[[
@@ -95,6 +128,8 @@ class Route(object):
         for child in self.children:
             if path_list[0] == child.path:
                 return child.get_route(path_list[1:])
+        if self.variable_child:
+            return self.variable_child.get_route(path_list[1:])
         raise RouteDoesNotExist(path_list)
 
 
@@ -104,18 +139,17 @@ class Router(object):
         self.services = services
 
     async def route(self, request: web.BaseRequest):
-        if check_auth(request, services['jwt']):
+        if not (
+            self.services.get('jwt') and check_auth(
+                request,
+                self.services['jwt'])):
             split_url = self.split_url(request.path)
             if split_url[0] == '':
-                route = self.base.get_route(split_url[1:])
-                if route is None:
-                    raise web.HTTPNotFound()
-                else:
-                    return await route(Method[request.method], request, self.services)
+                return await self.base(split_url[1:], Method[request.method], request, self.services)
                 # this should never happen
                 raise ValueError('wut?')
         else:
-            raise web.HTTPUnathorized()
+            raise web.HTTPUnauthorized()
 
     def add_route(self, url: str):
         split_url = self.split_url(url)
@@ -131,8 +165,7 @@ class Router(object):
         try:
             route = self.base.get_route(split_url)
         except RouteDoesNotExist:
-            self.base.add_route(split_url)
-            route = self.base.get_route(split_url)
+            route = self.base.add_route(split_url)
         route.add_handler(method, handler)
 
     @staticmethod
