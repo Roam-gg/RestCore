@@ -4,7 +4,7 @@ import sys
 from setuptools import setup
 from setuptools.command.install import install
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 def readme():
     """print long description"""
