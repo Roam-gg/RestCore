@@ -320,10 +320,9 @@ class Router:
         # This works as the first term in the and is evaluated before the
         # second. If the first term evalutes to false, the second term is
         # not evaluated at all
-        if not (
-            self.services.get('jwt') and check_auth(
+        if self.services.get('jwt') and check_auth(
                 request,
-                self.services['jwt'])):
+                self.services['jwt']):
             split_url = self.split_url(request.path)
             if split_url[0] == '':
                 return await self.base(
