@@ -8,7 +8,7 @@ from typing import List, Callable, Dict
 
 from aiohttp import web
 from .pyjwt import JWTService, TokenInvalid
-
+from .extensions import Extension
 
 __all__ = (
     'HandlerExists',
@@ -419,10 +419,16 @@ class HTTPServer:
     def __init__(self,
                  services: Dict[str,
                                 object],
+                 extensions: Dict[str, Extension],
                  router=None,
                  host='0.0.0.0',
                  port=8080):
         self.router = router if router else Router(services)
+        for name, ext in extensions.items():
+            if not isinstance(ext, Extension):
+                raise TypeError(f"{name}: {ext} is not an instance of Extension")
+        self.extensions = extensions
+        self.services = services
         self._host = host
         self._port = port
         self._exit_event = asyncio.Event()
@@ -432,7 +438,10 @@ class HTTPServer:
         runner = web.ServerRunner(server)
         await runner.setup()
         site = web.TCPSite(runner, self._host, self._port)
-        await site.start()
+
+        for extension in self.extensions:
+            await extension.start(self.services)
+        await site.start(services)
         print(f'Started HTTPServer on http://{self._host}:{self._port}/')
         # Keep running the server until the exit coroutine is used
         await self._exit_event.wait()
@@ -440,4 +449,6 @@ class HTTPServer:
     async def exit(self):
         """Stop the server from running
         """
+        for extension in self.extensions:
+            await extension.stop()
         self._exit_event.set()

@@ -1,5 +1,6 @@
 from .pyjwt import *
 from .httpserver import *
+from .extensions import Extension
 
 __all__ = (
         'HTTPServer',
@@ -9,4 +10,5 @@ __all__ = (
         'Route',
         'RouteDoesNotExist',
         'Router',
-        'TokenInvalid')
+        'TokenInvalid',
+        'Extension')
