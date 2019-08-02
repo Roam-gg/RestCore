@@ -1,7 +1,7 @@
 """This module provides the jwtservice that can be used to verify jwt tokens
 It uses PyJWT"""
 import jwt
-
+from .services import Service
 
 class TokenInvalid(Exception):
     """A generic exception that is raised when a token is invalid
@@ -13,7 +13,7 @@ class TokenInvalid(Exception):
     def __repr__(self):
         return f'The token {self.token} is not valid'
 
-class JWTService:
+class JWTService(Service):
     """An object that decodes and verifies jwt tokens,
     simply call an instance of the class.
 
@@ -27,7 +27,7 @@ class JWTService:
     """
     __slots__ = ('key', 'algorithms')
 
-    def __init__(self, key, algorithms):
+    def __init__(self, key, algorithms, *args, **kwargs):
         self.key = key
         self.algorithms = algorithms
 
