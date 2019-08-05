@@ -13,7 +13,6 @@ class TokenValidator(Service):
                 return True
             if resp.status == 401:
                 return False
-            print('Token couldn\'t be validated')
             return False
 
     async def get_user(self, token):

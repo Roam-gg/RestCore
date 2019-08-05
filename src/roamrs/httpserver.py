@@ -7,7 +7,6 @@ from enum import Enum
 from typing import List, Callable, Dict
 
 from aiohttp import web
-from .pyjwt import JWTService, TokenInvalid
 from .extensions import Extension
 from .services import Service
 from .auth import TokenValidator
@@ -20,34 +19,6 @@ __all__ = (
     'Router',
     'HTTPServer'
 )
-
-
-def check_auth(request: web.Request, jwt_service: JWTService) -> bool:
-    """Helper function to check that a passed token is valid
-
-    You probably should not call this, it is for the router to use
-
-    Parameters
-    ----------
-    request
-       The request with the token in it's "Authorization" header
-    jwt_service
-       The premade service to use to check the token
-
-    Returns
-    -------
-    bool
-       Was the token valid for this request?
-    """
-    token = request.headers.get('Authorization')
-    if not token:
-        return False
-    try:
-        jwt_service(token)
-    except TokenInvalid:
-        return False
-    else:
-        return True
 
 
 class HandlerExists(Exception):

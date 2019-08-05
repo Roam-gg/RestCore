@@ -43,10 +43,7 @@ setup(
         packages=['roamrs'],
         package_dir = {'': 'src'},
         install_requires=[
-            'aiohttp',
-            'PyJWT[crypto]',
-            'neomodel',
-            'uvloop'
+            'aiohttp'
         ],
         python_requires='>=3.6',
         cmdclass={
