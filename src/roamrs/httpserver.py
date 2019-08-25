@@ -7,45 +7,20 @@ from enum import Enum
 from typing import List, Callable, Dict
 
 from aiohttp import web
-from .pyjwt import JWTService, TokenInvalid
-
+from .extensions import Extension
+from .services import Service
+from .auth import TokenValidator
+from .common import Method
+from .context import Context
+from .cog import Cog, RouteHolder
 
 __all__ = (
     'HandlerExists',
     'RouteDoesNotExist',
-    'Method',
     'Route',
     'Router',
     'HTTPServer'
 )
-
-
-def check_auth(request: web.Request, jwt_service: JWTService) -> bool:
-    """Helper function to check that a passed token is valid
-
-    You probably should not call this, it is for the router to use
-
-    Parameters
-    ----------
-    request
-       The request with the token in it's "Authorization" header
-    jwt_service
-       The premade service to use to check the token
-
-    Returns
-    -------
-    bool
-       Was the token valid for this request?
-    """
-    token = request.headers.get('Authorization')
-    if not token:
-        return False
-    try:
-        jwt_service(token)
-    except TokenInvalid:
-        return False
-    else:
-        return True
 
 
 class HandlerExists(Exception):
@@ -78,12 +53,6 @@ class RouteDoesNotExist(Exception):
         return 'route at path {path_list} does not exist.'
 
 
-class Method(Enum):
-    """An enum of possible methods that handlers can respond to
-    """
-
-    GET = 'GET'
-    POST = 'POST'
 
 
 class Route:
@@ -146,23 +115,13 @@ class Route:
         self.children = []
         self.variable_child = None
 
-    async def __call__(
-            self,
-            path_list: List[str],
-            method: Method,
-            request: web.BaseRequest,
-            services: List[object],
-            *args, **kwargs) -> web.Response:
-        url_data = kwargs.get('url_data', {})
+    async def __call__(self, path_list: List[str], method: Method, ctx: Context) -> web.Response:
+        method = Method(ctx.raw_request.method)
         # If the remaining path list is empty then we must want this route!
         if path_list == []:
             if self.handlers[method]:
                 # let's get our result from our handler
-                return await self.handlers[method](
-                    request,
-                    services,
-                    *args,
-                    **kwargs)
+                return await self.handlers[method](ctx)
             # uh oh! we don't have a handler for this method
             raise web.HTTPNotFound()
         # The path list isn't empty so the next section sould
@@ -170,21 +129,13 @@ class Route:
         for child in self.children:
             if path_list[0] == child.path:
                 # Hey the path matches! let's get the result from the child.
-                return await child(
-                    path_list[1:],
-                    method,
-                    request,
-                    services,
-                    *args,
-                    **kwargs)
+                return await child(path_list[1:], method, ctx)
         # There wasn't a matching path? well is there a child we have that's
         # variable?
         if self.variable_child:
             # Let's update the url_data parameter with this path.
-            url_data[self.variable_child.path] = path_list[0]
-            kwargs.update({'url_data': url_data})
-            return await self.variable_child(
-                path_list[1:], method, request, services, *args, **kwargs)
+            ctx.url_data[self.variable_child.path] = path_list[0]
+            return await self.variable_child(path_list[1:], method, ctx)
         # Wait there isn't a variable child either? Then what is the client
         # requesting?
         raise web.HTTPNotFound()
@@ -237,8 +188,7 @@ class Route:
             self.children.append(new_child)
         return new_child.add_route(path_list[1:])
 
-    def add_handler(self, method: Method, handler: Callable[[
-            web.BaseRequest, Dict[str, object]], web.Response]):
+    def add_handler(self, holder: RouteHolder):
         """Add a handler to a route under a given method
 
         Parameters
@@ -257,13 +207,13 @@ class Route:
         :class:`HandlerExists`
             A handler already exists under this method, you can't replace it.
         """
-        if self.handlers[method] is not None:
+        if self.handlers[holder.method] is not None:
             raise HandlerExists(
                 self.path,
-                method,
-                self.handlers[method],
-                handler)
-        self.handlers[method] = handler
+                holder.method,
+                self.handlers[holder.method],
+                holder.func)
+        self.handlers[holder.method] = holder.func
 
     def get_route(self, path_list: List[str]) -> 'Route':
         """Get a route from a list of endpoints
@@ -312,24 +262,26 @@ class Router:
         The services that are available to handlers (and the router)
     """
 
-    def __init__(self, services: Dict[str, object]):
+    def __init__(self, services: Dict[str, object], extensions: Dict[str, Extension]):
         self.base = Route('')
         self.services = services
+        self.extensions = extensions
 
     async def __call__(self, request: web.BaseRequest) -> web.Response:
         # This works as the first term in the and is evaluated before the
         # second. If the first term evalutes to false, the second term is
         # not evaluated at all
-        if not (
-            self.services.get('jwt') and check_auth(
-                request,
-                self.services['jwt'])):
+        token_validator =  self.services.get('roamgg_token')
+        if token_validator and await token_validator(request.headers['Authorization']):
             split_url = self.split_url(request.path)
             if split_url[0] == '':
-                return await self.base(
-                    split_url[1:],
-                    Method[request.method],
-                    request, self.services)
+                user = await token_validator.get_user(request.headers['Authorizaiton'])
+                if request.content_type == 'application/json':
+                    data = await request.json()
+                else:
+                    data = request.query
+                context = Context(request, user, {}, self.services, self.extensions, data)
+                return await self.base(split_url, Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
         raise web.HTTPUnauthorized()
@@ -360,9 +312,7 @@ class Router:
         # this should never happen
         raise ValueError('wut?')
 
-    def add_handler(
-            self, url: str, method: Method,
-            handler: Callable[[web.BaseRequest], Dict[str, object]]):
+    def add_handler(self, holder: RouteHolder):
         """Add a handler to a route at a given url
         This method creates routes as needed to add the handler.
 
@@ -377,12 +327,12 @@ class Router:
         -------
         None
         """
-        split_url = self.split_url(url)[1:]
+        split_url = holder.split_path
         try:
             route = self.base.get_route(split_url)
         except RouteDoesNotExist:
             route = self.base.add_route(split_url)
-        route.add_handler(method, handler)
+        route.add_handler(holder)
 
     @staticmethod
     def split_url(url):
@@ -417,20 +367,34 @@ class HTTPServer:
 
     def __init__(self,
                  services: Dict[str,
-                                object],
-                 router=None,
+                                Service],
+                 extensions: Dict[str, Extension],
                  host='0.0.0.0',
-                 port=8080):
-        self.router = router if router else Router(services)
+                 port=8080, security_url=None):
+        for name, ext in extensions.items():
+            if not isinstance(ext, Extension):
+                raise TypeError(f"{name}: {ext} is not an instance of Extension")
+        self.extensions = extensions
+        if security_url:
+            if 'roamgg_token' in services:
+                raise ValueError('Can\'t enable security service as it is already registered')
+            else:
+                services['roamgg_token'] = TokenValidator.service_factory(security_url)
+        self.services = {k: s(self.extensions) for k, s in services.items()}
+        self.router = Router(self.services, self.extensions)
         self._host = host
         self._port = port
         self._exit_event = asyncio.Event()
+        self.cogs = []
 
     async def __call__(self):
         server = web.Server(self.router)
         runner = web.ServerRunner(server)
         await runner.setup()
         site = web.TCPSite(runner, self._host, self._port)
+
+        for extension in self.extensions.values():
+            await extension(self.services, self.extensions)
         await site.start()
         print(f'Started HTTPServer on http://{self._host}:{self._port}/')
         # Keep running the server until the exit coroutine is used
@@ -439,4 +403,15 @@ class HTTPServer:
     async def exit(self):
         """Stop the server from running
         """
+        for extension in self.extensions:
+            await extension.stop()
         self._exit_event.set()
+
+    def load_cog(self, cog: Cog):
+        cog.inject(self)
+        self.cogs.append(cog)
+
+    def unload_cog(self, cog_name: str):
+        for cog in self.cogs:
+            if cog.__cog_name__ == cog_name:
+                cog._eject(self)
