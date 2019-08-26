@@ -1,4 +1,3 @@
-from __future__ import annotations
 from typing import Dict
 from functools import partial
 import abc
