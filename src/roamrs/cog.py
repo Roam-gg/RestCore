@@ -44,7 +44,7 @@ class Cog(metaclass=CogMeta):
             try:
                 server.router.add_handler(route)
             except Exception as e:
-                for to_undo in self.__routes[:index]:
+                for to_undo in self._routes[:index]:
                     server.router.remove_route(to_undo)
                 raise e
 
