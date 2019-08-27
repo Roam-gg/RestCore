@@ -98,6 +98,8 @@ class Route:
         if path != '':
             ROUTE_PATTERN = re.compile(r'([A-Za-z0-9]+)|{([A-Za-z0-9.\-_]+)}')
             match = ROUTE_PATTERN.match(path)
+            if not match:
+                raise ValueError(f'Invalid path "{path}" passed to route')
             term, var = match.groups()
             # This path looks like "some text" so it is not variable
             if term is not None:
@@ -215,6 +217,28 @@ class Route:
                 holder.func)
         self.handlers[holder.method] = holder.func
 
+    def remove_route(self, path_list: List[str]) -> bool:
+        if len(path_list) == 1:
+            for i, c in enumerate(self.children):
+                if c.path == path_list[0]:
+                    del self.children[i]
+                    return True
+            return False
+        for i, child in enumerate(self.children):
+            if child.path == path_list[0]:
+                r = child.remove_route(path_list[1:])
+                if r:
+                    c = len(child.children) == 0
+                    h = all(map(lambda h: h == None, child.handlers.values()))
+                    if c and h:
+                        del self.children[i]
+                return True
+        if self.variable_child and (
+                self.variable_child.path == path_list[0].strip('{}')):
+            self.variable_child = None
+            return True
+        return False
+
     def get_route(self, path_list: List[str]) -> 'Route':
         """Get a route from a list of endpoints
 
@@ -311,6 +335,22 @@ class Router:
             return self.base.add_route(split_url[1:])
         # this should never happen
         raise ValueError('wut?')
+
+    def remove_route(self, path: List[str]) -> bool:
+        """Remove the route at the end of a route path,
+        if no children or handlers are left, the parent is also removed
+
+        Parameters
+        ----------
+        path : list of str
+           The path to remove the route from
+
+        Returns
+        -------
+        bool
+           True if the route existed and was removed, false if it didn't exist
+        """
+        return self.base.remove_route(path)
 
     def add_handler(self, holder: RouteHolder):
         """Add a handler to a route at a given url

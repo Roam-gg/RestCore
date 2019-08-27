@@ -4,7 +4,7 @@ import sys
 from setuptools import setup
 from setuptools.command.install import install
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 def readme():
     """print long description"""
@@ -45,7 +45,7 @@ setup(
         install_requires=[
             'aiohttp'
         ],
-        python_requires='>=3.6',
+        python_requires='>=3.7',
         cmdclass={
             'verify': VerifyVersionCommand,
         }
