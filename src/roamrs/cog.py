@@ -45,12 +45,12 @@ class Cog(metaclass=CogMeta):
                 server.router.add_handler(route)
             except Exception as e:
                 for to_undo in self._routes[:index]:
-                    server.router.remove_route(to_undo)
+                    server.router.remove_route(to_undo.split_path)
                 raise e
 
     def _eject(self, server: 'HTTPServer'):
         for route in self._routes:
-            server.router.remove_route(route)
+            server.router.remove_route(route.split_path)
 
 
 def route(path: str, method: Method):
