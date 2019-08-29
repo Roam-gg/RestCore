@@ -304,7 +304,10 @@ class Router:
                     map(lambda x: x(request.headers.get('Authorization')), self._auth_services))):
             split_url = self.split_url(request.path)
             if split_url[0] == '':
-                user = await self._auth_services[0].get_user(request.headers.get('Authorization'))
+                if self._auth_services:
+                    user = await self._auth_services[0].get_user(request.headers.get('Authorization'))
+                else:
+                    user = None
                 if request.content_type == 'application/json':
                     data = await request.json()
                 else:
