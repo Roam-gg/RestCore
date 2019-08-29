@@ -223,6 +223,10 @@ class Route:
                 if c.path == path_list[0]:
                     del self.children[i]
                     return True
+                if self.variable_child and (
+                        self.variable_child.path == path_list[0].strip('{}')):
+                    self.variable_child = None
+                    return True
             return False
         for i, child in enumerate(self.children):
             if child.path == path_list[0]:
@@ -232,11 +236,10 @@ class Route:
                     h = all(map(lambda h: h == None, child.handlers.values()))
                     if c and h:
                         del self.children[i]
-                return True
+                return r
         if self.variable_child and (
                 self.variable_child.path == path_list[0].strip('{}')):
-            self.variable_child = None
-            return True
+            return self.variable_child.remove_route(path_list[1:])
         return False
 
     def get_route(self, path_list: List[str]) -> 'Route':
