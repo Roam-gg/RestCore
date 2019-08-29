@@ -307,8 +307,14 @@ class Router:
                     data = await request.json()
                 else:
                     data = request.query
-                context = Context(request, user, {}, self.services, self.extensions, data)
-                return await self.base(split_url, Method(request.method), context)
+                context = Context(
+                    raw_request=request,
+                    user_data=user,
+                    url_data={},
+                    services=self._services,
+                    extensions=self._extensions,
+                    sent_data=data)
+                return await self._base(split_url, Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
         raise web.HTTPUnauthorized()
