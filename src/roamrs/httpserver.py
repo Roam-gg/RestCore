@@ -8,7 +8,7 @@ from typing import List, Callable, Dict
 
 from aiohttp import web
 from .extensions import Extension
-from .services import Service
+from .services import Service, AuthService
 from .auth import TokenValidator
 from .common import Method
 from .context import Context
@@ -290,25 +290,36 @@ class Router:
     """
 
     def __init__(self, services: Dict[str, object], extensions: Dict[str, Extension]):
-        self.base = Route('')
-        self.services = services
-        self.extensions = extensions
+        self._base = Route('')
+        self._services = services
+        self._extensions = extensions
+        self._auth_services = [s for s in services.values() if isinstance(AuthService, s)]
 
     async def __call__(self, request: web.BaseRequest) -> web.Response:
         # This works as the first term in the and is evaluated before the
         # second. If the first term evalutes to false, the second term is
         # not evaluated at all
-        token_validator =  self.services.get('roamgg_token')
-        if token_validator and await token_validator(request.headers['Authorization']):
+        if (not self._auth_services) or (
+                self._auth_services and all(
+                    map(lambda x: x(request.headers.get('Authorization')), self._auth_services))):
             split_url = self.split_url(request.path)
             if split_url[0] == '':
-                user = await token_validator.get_user(request.headers['Authorizaiton'])
+                if self._auth_services:
+                    user = await self._auth_services[0].get_user(request.headers.get('Authorization'))
+                else:
+                    user = None
                 if request.content_type == 'application/json':
                     data = await request.json()
                 else:
                     data = request.query
-                context = Context(request, user, {}, self.services, self.extensions, data)
-                return await self.base(split_url, Method(request.method), context)
+                context = Context(
+                    raw_request=request,
+                    user_data=user,
+                    url_data={},
+                    services=self._services,
+                    extensions=self._extensions,
+                    sent_data=data)
+                return await self._base(split_url, Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
         raise web.HTTPUnauthorized()
@@ -335,7 +346,7 @@ class Router:
         """
         split_url = self.split_url(url)
         if split_url[0] == '':
-            return self.base.add_route(split_url[1:])
+            return self._base.add_route(split_url[1:])
         # this should never happen
         raise ValueError('wut?')
 
@@ -353,7 +364,7 @@ class Router:
         bool
            True if the route existed and was removed, false if it didn't exist
         """
-        return self.base.remove_route(path)
+        return self._base.remove_route(path)
 
     def add_handler(self, holder: RouteHolder):
         """Add a handler to a route at a given url
@@ -372,9 +383,9 @@ class Router:
         """
         split_url = holder.split_path
         try:
-            route = self.base.get_route(split_url)
+            route = self._base.get_route(split_url)
         except RouteDoesNotExist:
-            route = self.base.add_route(split_url)
+            route = self._base.add_route(split_url)
         route.add_handler(holder)
 
     @staticmethod
@@ -413,16 +424,11 @@ class HTTPServer:
                                 Service],
                  extensions: Dict[str, Extension],
                  host='0.0.0.0',
-                 port=8080, security_url=None):
+                 port=8080):
         for name, ext in extensions.items():
             if not isinstance(ext, Extension):
                 raise TypeError(f"{name}: {ext} is not an instance of Extension")
         self.extensions = extensions
-        if security_url:
-            if 'roamgg_token' in services:
-                raise ValueError('Can\'t enable security service as it is already registered')
-            else:
-                services['roamgg_token'] = TokenValidator.service_factory(security_url)
         self.services = {k: s(self.extensions) for k, s in services.items()}
         self.router = Router(self.services, self.extensions)
         self._host = host
