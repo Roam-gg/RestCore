@@ -24,7 +24,7 @@ class TokenValidator(AuthService):
             return False
 
     async def get_user(self, auth_str: str) -> Dict[str, Any]:
-        await self_create_session()
+        await self._create_session()
         async with self.__session.get(self.url+'/get_user', headers={'Authorization': auth_str}) as resp:
             if resp.status == 200:
                 return await resp.json()
