@@ -43,7 +43,8 @@ setup(
         packages=['roamrs'],
         package_dir = {'': 'src'},
         install_requires=[
-            'aiohttp'
+            'aiohttp',
+            'aiostream >= 0.3.3'
         ],
         python_requires='>=3.7',
         cmdclass={

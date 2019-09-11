@@ -10,7 +10,7 @@ from aiohttp import web
 from .extensions import Extension
 from .services import Service, AuthService
 from .auth import TokenValidator
-from .common import Method
+from .common import Method, async_map, async_all
 from .context import Context
 from .cog import Cog, RouteHolder
 
@@ -293,15 +293,20 @@ class Router:
         self._base = Route('')
         self._services = services
         self._extensions = extensions
-        self._auth_services = [s for s in services.values() if isinstance(AuthService, s)]
+        self._auth_services = [s for s in services.values() if isinstance(s, AuthService)]
 
     async def __call__(self, request: web.BaseRequest) -> web.Response:
         # This works as the first term in the and is evaluated before the
         # second. If the first term evalutes to false, the second term is
         # not evaluated at all
-        if (not self._auth_services) or (
-                self._auth_services and all(
-                    map(lambda x: x(request.headers.get('Authorization')), self._auth_services))):
+        if not self._auth_services:
+            auth = True
+        else:
+            async def map_func(service):
+                return await service(request.headers.get('Authorization'))
+            auth = await async_all(await async_map(map_func, self._auth_services))
+        if auth:
+            LOGGER.info('Authorized request made to: %s method: %s', request.path, request.method)
             split_url = self.split_url(request.path)
             if split_url[0] == '':
                 if self._auth_services:
