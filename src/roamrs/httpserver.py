@@ -420,6 +420,18 @@ class Router:
         """
         return url.rstrip('/').split('/')
 
+    def get_routes(self):
+        def recurse_through(r, l, start=''):
+            l.append(start + r.path)
+            for child in r.children:
+                recurse_through(child, l, start+r.path+'/')
+            if r.variable_child:
+                recurse_through(r.variable_child, l, start+r.path+'/')
+            return l
+        return recurse_through(self._base, [])
+
+
+
 
 class HTTPServer:
     """A class that runs an aiohttp server and contains all the server
@@ -490,3 +502,6 @@ class HTTPServer:
         for cog in self.cogs:
             if cog.__cog_name__ == cog_name:
                 cog._eject(self)
+
+    def get_routes(self):
+        return self.router.get_route_list()
