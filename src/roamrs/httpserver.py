@@ -133,7 +133,6 @@ class Route:
         return any(map(lambda x: x is not None, self.handlers.values()))
 
     async def __call__(self, path_list: List[str], method: Method, ctx: Context) -> web.Response:
-        method = Method(ctx.raw_request.method)
         # If the remaining path list is empty then we must want this route!
         if path_list == []:
             if self.handlers[method]:
