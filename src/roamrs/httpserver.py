@@ -342,7 +342,7 @@ class Router:
                     services=self._services,
                     extensions=self._extensions,
                     sent_data=data)
-                return await self._base(split_url, Method(request.method), context)
+                return await self._base(split_url[1:], Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
         LOGGER.warning('Unauthorized request made to: %s method %s', request.path, request.method)
