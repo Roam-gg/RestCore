@@ -128,6 +128,10 @@ class Route:
         self.children = []
         self.variable_child = None
 
+    @property
+    def has_handlers(self):
+        return any(map(lambda x: x is not None, self.handlers.values()))
+
     async def __call__(self, path_list: List[str], method: Method, ctx: Context) -> web.Response:
         method = Method(ctx.raw_request.method)
         # If the remaining path list is empty then we must want this route!
@@ -136,6 +140,9 @@ class Route:
                 # let's get our result from our handler
                 return await self.handlers[method](ctx)
             # uh oh! we don't have a handler for this method
+            if self.has_handlers:
+                allowed_methods = list(map(lambda x: x.value, filter(lambda x: self.handlers[x] is not None, self.handlers)))
+                raise web.HTTPMethodNotAllowed(allowed_methods=allowed_methods, method=method.value)
             raise web.HTTPNotFound()
         # The path list isn't empty so the next section sould
         # be a child right?
