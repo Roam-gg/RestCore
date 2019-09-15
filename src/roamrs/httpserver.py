@@ -2,17 +2,28 @@
 """
 import asyncio
 import re
+import logging
 
 from enum import Enum
 from typing import List, Callable, Dict
+from sys import stdout
 
 from aiohttp import web
 from .extensions import Extension
-from .services import Service
+from .services import Service, AuthService
 from .auth import TokenValidator
-from .common import Method
+from .common import Method, async_map, async_all
 from .context import Context
 from .cog import Cog, RouteHolder
+
+LOGGER = logging.getLogger(__name__)
+if not LOGGER.handlers:
+    LOGGER.setLevel(logging.INFO)
+    HANDLER = logging.StreamHandler(stdout)
+    HANDLER.setLevel(logging.INFO)
+    FORMATTER = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    HANDLER.setFormatter(FORMATTER)
+    LOGGER.addHandler(HANDLER)
 
 __all__ = (
     'HandlerExists',
@@ -117,14 +128,20 @@ class Route:
         self.children = []
         self.variable_child = None
 
+    @property
+    def has_handlers(self):
+        return any(map(lambda x: x is not None, self.handlers.values()))
+
     async def __call__(self, path_list: List[str], method: Method, ctx: Context) -> web.Response:
-        method = Method(ctx.raw_request.method)
         # If the remaining path list is empty then we must want this route!
         if path_list == []:
             if self.handlers[method]:
                 # let's get our result from our handler
                 return await self.handlers[method](ctx)
             # uh oh! we don't have a handler for this method
+            if self.has_handlers:
+                allowed_methods = list(map(lambda x: x.value, filter(lambda x: self.handlers[x] is not None, self.handlers)))
+                raise web.HTTPMethodNotAllowed(allowed_methods=allowed_methods, method=method.value)
             raise web.HTTPNotFound()
         # The path list isn't empty so the next section sould
         # be a child right?
@@ -140,6 +157,7 @@ class Route:
             return await self.variable_child(path_list[1:], method, ctx)
         # Wait there isn't a variable child either? Then what is the client
         # requesting?
+        LOGGER.info('Nowhere found for: %s', path_list)
         raise web.HTTPNotFound()
 
     def add_route(self, path_list: List[str]) -> 'Route':
@@ -223,6 +241,10 @@ class Route:
                 if c.path == path_list[0]:
                     del self.children[i]
                     return True
+                if self.variable_child and (
+                        self.variable_child.path == path_list[0].strip('{}')):
+                    self.variable_child = None
+                    return True
             return False
         for i, child in enumerate(self.children):
             if child.path == path_list[0]:
@@ -232,11 +254,10 @@ class Route:
                     h = all(map(lambda h: h == None, child.handlers.values()))
                     if c and h:
                         del self.children[i]
-                return True
+                return r
         if self.variable_child and (
                 self.variable_child.path == path_list[0].strip('{}')):
-            self.variable_child = None
-            return True
+            return self.variable_child.remove_route(path_list[1:])
         return False
 
     def get_route(self, path_list: List[str]) -> 'Route':
@@ -287,27 +308,44 @@ class Router:
     """
 
     def __init__(self, services: Dict[str, object], extensions: Dict[str, Extension]):
-        self.base = Route('')
-        self.services = services
-        self.extensions = extensions
+        self._base = Route('')
+        self._services = services
+        self._extensions = extensions
+        self._auth_services = [s for s in services.values() if s.is_auth_service]
 
     async def __call__(self, request: web.BaseRequest) -> web.Response:
         # This works as the first term in the and is evaluated before the
         # second. If the first term evalutes to false, the second term is
         # not evaluated at all
-        token_validator =  self.services.get('roamgg_token')
-        if token_validator and await token_validator(request.headers['Authorization']):
+        if not self._auth_services:
+            auth = True
+        else:
+            async def map_func(service):
+                return await service(request.headers.get('Authorization'))
+            auth = await async_all(await async_map(map_func, self._auth_services))
+        if auth:
+            LOGGER.info('Authorized request made to: %s method: %s', request.path, request.method)
             split_url = self.split_url(request.path)
             if split_url[0] == '':
-                user = await token_validator.get_user(request.headers['Authorizaiton'])
+                if self._auth_services:
+                    user = await self._auth_services[0].get_user(request.headers.get('Authorization'))
+                else:
+                    user = None
                 if request.content_type == 'application/json':
                     data = await request.json()
                 else:
                     data = request.query
-                context = Context(request, user, {}, self.services, self.extensions, data)
-                return await self.base(split_url, Method(request.method), context)
+                context = Context(
+                    raw_request=request,
+                    user_data=user,
+                    url_data={},
+                    services=self._services,
+                    extensions=self._extensions,
+                    sent_data=data)
+                return await self._base(split_url[1:], Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
+        LOGGER.warning('Unauthorized request made to: %s method %s', request.path, request.method)
         raise web.HTTPUnauthorized()
 
     def add_route(self, url: str) -> Route:
@@ -332,7 +370,7 @@ class Router:
         """
         split_url = self.split_url(url)
         if split_url[0] == '':
-            return self.base.add_route(split_url[1:])
+            return self._base.add_route(split_url[1:])
         # this should never happen
         raise ValueError('wut?')
 
@@ -350,7 +388,7 @@ class Router:
         bool
            True if the route existed and was removed, false if it didn't exist
         """
-        return self.base.remove_route(path)
+        return self._base.remove_route(path)
 
     def add_handler(self, holder: RouteHolder):
         """Add a handler to a route at a given url
@@ -369,9 +407,9 @@ class Router:
         """
         split_url = holder.split_path
         try:
-            route = self.base.get_route(split_url)
+            route = self._base.get_route(split_url)
         except RouteDoesNotExist:
-            route = self.base.add_route(split_url)
+            route = self._base.add_route(split_url)
         route.add_handler(holder)
 
     @staticmethod
@@ -381,6 +419,18 @@ class Router:
         root route's path
         """
         return url.rstrip('/').split('/')
+
+    def get_routes(self):
+        def recurse_through(r, l, start=''):
+            l.append(start + r.path)
+            for child in r.children:
+                recurse_through(child, l, start+r.path+'/')
+            if r.variable_child:
+                recurse_through(r.variable_child, l, start+r.path+'/')
+            return l
+        return recurse_through(self._base, [])
+
+
 
 
 class HTTPServer:
@@ -410,17 +460,14 @@ class HTTPServer:
                                 Service],
                  extensions: Dict[str, Extension],
                  host='0.0.0.0',
-                 port=8080, security_url=None):
+                 port=8080):
         for name, ext in extensions.items():
             if not isinstance(ext, Extension):
                 raise TypeError(f"{name}: {ext} is not an instance of Extension")
         self.extensions = extensions
-        if security_url:
-            if 'roamgg_token' in services:
-                raise ValueError('Can\'t enable security service as it is already registered')
-            else:
-                services['roamgg_token'] = TokenValidator.service_factory(security_url)
-        self.services = {k: s(self.extensions) for k, s in services.items()}
+        self.services = {}
+        for name, service in services.items():
+            self.services[name] = service(self.extensions, self.services)
         self.router = Router(self.services, self.extensions)
         self._host = host
         self._port = port
@@ -436,7 +483,7 @@ class HTTPServer:
         for extension in self.extensions.values():
             await extension(self.services, self.extensions)
         await site.start()
-        print(f'Started HTTPServer on http://{self._host}:{self._port}/')
+        LOGGER.info('Started HTTPServer on http://%s:%s/', self._host, self._port)
         # Keep running the server until the exit coroutine is used
         await self._exit_event.wait()
 
@@ -455,3 +502,7 @@ class HTTPServer:
         for cog in self.cogs:
             if cog.__cog_name__ == cog_name:
                 cog._eject(self)
+                break
+
+    def get_routes(self):
+        return self.router.get_route_list()

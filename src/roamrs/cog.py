@@ -40,7 +40,7 @@ class Cog(metaclass=CogMeta):
             route.func = getattr(self, route.func.__name__)
             route.cog = self
     def inject(self, server: 'HTTPServer'):
-        for index, route in enumerate(self._routes):
+        for index, route in enumerate(self._routes, start=1):
             try:
                 server.router.add_handler(route)
             except Exception as e:

@@ -4,7 +4,7 @@ import sys
 from setuptools import setup
 from setuptools.command.install import install
 
-VERSION = "0.3.2"
+VERSION = "0.3.3"
 
 def readme():
     """print long description"""
@@ -43,7 +43,8 @@ setup(
         packages=['roamrs'],
         package_dir = {'': 'src'},
         install_requires=[
-            'aiohttp'
+            'aiohttp',
+            'aiostream >= 0.3.3'
         ],
         python_requires='>=3.7',
         cmdclass={
