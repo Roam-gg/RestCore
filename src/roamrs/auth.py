@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 class TokenValidator(AuthService):
     __slots__ = ('url')
-    def __init__(self, url, *args, **kwargs):
+    def __init__(self, _, __, url, *args, **kwargs):
         self.url = url.rstrip('/')
         self.__args = args
         self.__kwargs = kwargs

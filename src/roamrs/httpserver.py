@@ -293,7 +293,7 @@ class Router:
         self._base = Route('')
         self._services = services
         self._extensions = extensions
-        self._auth_services = [s for s in services.values() if isinstance(s, AuthService)]
+        self._auth_services = [s for s in services.values() if s.is_auth_service]
 
     async def __call__(self, request: web.BaseRequest) -> web.Response:
         # This works as the first term in the and is evaluated before the
@@ -434,7 +434,9 @@ class HTTPServer:
             if not isinstance(ext, Extension):
                 raise TypeError(f"{name}: {ext} is not an instance of Extension")
         self.extensions = extensions
-        self.services = {k: s(self.extensions) for k, s in services.items()}
+        self.services = {}
+        for name, service in services.items():
+            self.services[name] = service(self.extensions, self.services)
         self.router = Router(self.services, self.extensions)
         self._host = host
         self._port = port
