@@ -2,9 +2,11 @@
 """
 import asyncio
 import re
+import logging
 
 from enum import Enum
 from typing import List, Callable, Dict
+from sys import stdout
 
 from aiohttp import web
 from .extensions import Extension
@@ -13,6 +15,15 @@ from .auth import TokenValidator
 from .common import Method, async_map, async_all
 from .context import Context
 from .cog import Cog, RouteHolder
+
+LOGGER = logging.getLogger(__name__)
+if not LOGGER.handlers:
+    LOGGER.setLevel(logging.INFO)
+    HANDLER = logging.StreamHandler(stdout)
+    HANDLER.setLevel(logging.INFO)
+    FORMATTER = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    HANDLER.setFormatter(FORMATTER)
+    LOGGER.addHandler(HANDLER)
 
 __all__ = (
     'HandlerExists',
@@ -140,6 +151,7 @@ class Route:
             return await self.variable_child(path_list[1:], method, ctx)
         # Wait there isn't a variable child either? Then what is the client
         # requesting?
+        LOGGER.info('Nowhere found for: %s', path_list)
         raise web.HTTPNotFound()
 
     def add_route(self, path_list: List[str]) -> 'Route':
@@ -327,6 +339,7 @@ class Router:
                 return await self._base(split_url, Method(request.method), context)
             # this should never happen. How does our url not start at the root?
             raise ValueError('wut?')
+        LOGGER.warning('Unauthorized request made to: %s method %s', request.path, request.method)
         raise web.HTTPUnauthorized()
 
     def add_route(self, url: str) -> Route:
@@ -452,7 +465,7 @@ class HTTPServer:
         for extension in self.extensions.values():
             await extension(self.services, self.extensions)
         await site.start()
-        print(f'Started HTTPServer on http://{self._host}:{self._port}/')
+        LOGGER.info('Started HTTPServer on http://%s:%s/', self._host, self._port)
         # Keep running the server until the exit coroutine is used
         await self._exit_event.wait()
 
