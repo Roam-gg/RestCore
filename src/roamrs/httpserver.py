@@ -502,6 +502,7 @@ class HTTPServer:
         for cog in self.cogs:
             if cog.__cog_name__ == cog_name:
                 cog._eject(self)
+                break
 
     def get_routes(self):
         return self.router.get_route_list()
