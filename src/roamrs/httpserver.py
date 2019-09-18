@@ -333,8 +333,10 @@ class Router:
                     user = None
                 if request.content_type == 'application/json':
                     data = await request.json()
-                else:
+                elif request.query_string != '':
                     data = request.query
+                else:
+                    data = (await request.content.read()).decode('UTF-8')
                 context = Context(
                     raw_request=request,
                     user_data=user,
