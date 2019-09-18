@@ -5,6 +5,7 @@ import re
 import logging
 
 from enum import Enum
+from inspect import iscoroutinefunction
 from typing import List, Callable, Dict
 from sys import stdout
 
@@ -508,3 +509,11 @@ class HTTPServer:
 
     def get_routes(self):
         return self.router.get_route_list()
+
+    def add_route(self, path: str, method: Method):
+        def route_def(func):
+            if not iscoroutinefunction(func):
+                raise TypeError('handler for route must be a coroutine')
+            holder = RouteHolder(func, path, method)
+            self.router.add_handler(holder)
+        return route_def
