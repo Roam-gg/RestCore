@@ -22,7 +22,8 @@ class RouteHolder:
         return self.path.rstrip('/').split('/')[1:]
 
 class CogMeta(type):
-    def __new__(cls, name, bases, attrs, **kwargs):
+    def __new__(cls, *args, **kwargs):
+        name, bases, attrs = args
         attrs['_routes'] = []
         attrs['__cog_name__'] = kwargs.pop('name', name)
         for attr_name, attr_value in attrs.copy().items():
@@ -34,11 +35,14 @@ class CogMeta(type):
             cog_route.cog = self
         return self
 
+
 class Cog(metaclass=CogMeta):
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         for route in self._routes:
             route.func = getattr(self, route.func.__name__)
             route.cog = self
+
     def inject(self, server: 'HTTPServer'):
         for index, route in enumerate(self._routes, start=1):
             try:
