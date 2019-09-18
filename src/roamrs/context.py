@@ -15,5 +15,8 @@ class Context:
     user_data: Dict[str, Any] = None
 
     @staticmethod
-    def respond(data: Dict[str, Any]) -> web.Response:
-        return web.json_response(data)
+    def respond(data: Dict[str, Any], content_type='application/json') -> web.Response:
+        if content_type == 'application/json':
+            return web.json_response(data)
+        else:
+            return web.Response(text=data)
