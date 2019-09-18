@@ -4,3 +4,4 @@ coverage
 codecov
 twine
 pytest-cov
+sphinx

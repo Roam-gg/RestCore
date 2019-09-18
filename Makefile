@@ -1,10 +1,10 @@
-.PHONY: help clean dev package test
+.PHONY: help clean dev package test docs
 
 help:
 	@echo "This project assumes that an active Python virtualenv is present."
-	@echo "The following make torfets are available:"
+	@echo "The following make targets are available:"
 	@echo "  dev install all deps for dev env"
-	@echo "  test ren all tests with coverage"
+	@echo "  test run all tests with coverage"
 
 clean:
 	rm -rf dist/*
@@ -20,3 +20,11 @@ package:
 test:
 	pytest --cov=src/roamrs .
 	coverage html
+
+SPHINXOPTS	?= -a -E docs
+SPHINXBUILD	?= sphinx-build
+SOURCEDIR	= docs
+BUILDDIR	= docs/_build/html/
+
+docs: 
+	PYTHONPATH=$(CURDIR) $(SPHINXBUILD) -b html $(SPHINXOPTS) $(BUILDDIR)
