@@ -12,12 +12,15 @@ class Extension(abc.ABC):
         pass
 
     @abc.abstractmethod
-    async def __call__(self, services: Dict[str, Service], extensions: Dict[str, Extension]):
+    async def __call__(
+        self, services: Dict[str, Service], extensions: Dict[str, Extension]
+    ):
         pass
 
     @abc.abstractmethod
     async def stop(self):
         pass
+
 
 class ExampleExtension(Extension):
     def __init__(self, counter):
@@ -33,7 +36,7 @@ class ExampleExtension(Extension):
         while self.counter >= 0 and not self.stop_event.is_set():
             await asyncio.sleep(1)
             self.counter -= 1
-        print('done!')
+        print("done!")
 
     async def stop(self):
         self.stop_event.set()

@@ -19,13 +19,14 @@ Here is an example Service to generate uuids when asked.
    import roamrs
    import uuid
 
-   class UUIDService(roamrs.Service):
-        def __init__(self, extensions, services):
-                self.extensions = extensions
-                self.services = services
 
-        def __call__(self):
-                return str(uuid.uuid4())
+   class UUIDService(roamrs.Service):
+       def __init__(self, extensions, services):
+           self.extensions = extensions
+           self.services = services
+
+       def __call__(self):
+           return str(uuid.uuid4())
 
 Services can obviously be more complex than this.
 For a good example look at the :class:`.auth.TokenValidator` service.

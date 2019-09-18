@@ -5,3 +5,4 @@ codecov
 twine
 pytest-cov
 sphinx
+pre-commit

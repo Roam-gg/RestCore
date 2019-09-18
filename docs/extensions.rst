@@ -18,35 +18,34 @@ For example, an implementation of a small echo websocket extension could be:
    import websocket
    import asyncio
 
+
    class WebSocketExtension(roamrs.Extension):
-        def __init__(self, host, port):
-            super().__init__()
-            self.host = host
-            self.port = port
-            self._stop = asyncio.Event()
-            self.services = None
-            self.extensions = None
-            self.server = None
+       def __init__(self, host, port):
+           super().__init__()
+           self.host = host
+           self.port = port
+           self._stop = asyncio.Event()
+           self.services = None
+           self.extensions = None
+           self.server = None
 
-        async def handler(self, websocket, path):
-            msg = await websocket.recv()
-            await websocket.send(msg)
+       async def handler(self, websocket, path):
+           msg = await websocket.recv()
+           await websocket.send(msg)
 
-        async def __call__(self, *args):
-            self.server = asyncio.create_task(self._start())
+       async def __call__(self, *args):
+           self.server = asyncio.create_task(self._start())
 
-        async def _start(self):
-            async with websockets.serve(
-                    self.handler, self.host, self.port):
-                await self._stop.wait()
+       async def _start(self):
+           async with websockets.serve(self.handler, self.host, self.port):
+               await self._stop.wait()
 
-        async def stop(self):
-            self._stop.set()
-            await self.server
+       async def stop(self):
+           self._stop.set()
+           await self.server
 
-   server = roamrs.HTTPServer(
-                extensions={
-                    'ws': WebSocketExtension('127.0.0.1', 8081)})
+
+   server = roamrs.HTTPServer(extensions={"ws": WebSocketExtension("127.0.0.1", 8081)})
    server.run()
 
 The main difference between extensions and services is that the registered services and extensions

@@ -22,13 +22,16 @@ It would look something like this:
 
    server = roamrs.HTTPServer()
 
-   @server.add_route('/echo', roamrs.Method.GET)
-   async def get_echo(ctx):
-        return ctx.respond('Try sending a post request', content_type='text/plain')
 
-   @server.add_route('/echo', roamrs.Method.POST)
+   @server.add_route("/echo", roamrs.Method.GET)
+   async def get_echo(ctx):
+       return ctx.respond("Try sending a post request", content_type="text/plain")
+
+
+   @server.add_route("/echo", roamrs.Method.POST)
    async def post_echo(ctx):
-        return ctx.respond(ctx.sent_data, content_type='text/plain')
+       return ctx.respond(ctx.sent_data, content_type="text/plain")
+
 
    server.run()
 

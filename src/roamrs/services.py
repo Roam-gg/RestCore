@@ -2,6 +2,7 @@ from typing import Dict, Union, Optional, Any
 import abc
 import asyncio
 
+
 class AbstractService(abc.ABC):
     @abc.abstractmethod
     def __init__(self, extensions, services, *args, **kwargs):
@@ -11,13 +12,17 @@ class AbstractService(abc.ABC):
     def __call__(self, *args, **kwargs):
         pass
 
+
 class ServiceHolder:
     _CLASS_HELD = AbstractService
+
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
+
     def __call__(self, e, s):
         return self._CLASS_HELD(e, s, *self.args, **self.kwargs)
+
 
 class ServiceMeta(abc.ABCMeta):
     def __new__(cls, name, bases, dct):
@@ -31,8 +36,11 @@ class ServiceMeta(abc.ABCMeta):
             h = super(ServiceMeta, cls).__new__(cls, name, tuple(new_bases), dct)
         else:
             h = super(ServiceMeta, cls).__new__(cls, name, bases, dct)
-        t = super(ServiceMeta, cls).__new__(cls, name+'Holder', (ServiceHolder,), {'_CLASS_HELD': h})
+        t = super(ServiceMeta, cls).__new__(
+            cls, name + "Holder", (ServiceHolder,), {"_CLASS_HELD": h}
+        )
         return t
+
 
 class Service(AbstractService, metaclass=ServiceMeta):
     _AUTH_SERVICE = False
@@ -40,6 +48,7 @@ class Service(AbstractService, metaclass=ServiceMeta):
     @property
     def is_auth_service(self):
         return self._AUTH_SERVICE
+
 
 class AuthService(Service):
     _AUTH_SERVICE = True

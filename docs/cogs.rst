@@ -29,23 +29,25 @@ made the body is added to the list. When a GET request is made, the first phrase
 
    import roamrs
 
+
    class Echo(roamrs.Cog):
-        def __init__(self):
-             super().__init__()
-             self.phrases = []
+       def __init__(self):
+           super().__init__()
+           self.phrases = []
 
-        @roamrs.route('/echo', roamrs.Method.GET)
-        async def get_echo(self, ctx):
-             if len(self.phrases) > 0:
-                 text = self.phrases.pop(0)
-             else:
-                 text = 'N/A'
-             return ctx.respond(text, content_type='text/plain')
+       @roamrs.route("/echo", roamrs.Method.GET)
+       async def get_echo(self, ctx):
+           if len(self.phrases) > 0:
+               text = self.phrases.pop(0)
+           else:
+               text = "N/A"
+           return ctx.respond(text, content_type="text/plain")
 
-        @roamrs.route('/echo', roamrs.Method.POST)
-        async def post_echo(self, ctx):
-             self.phrases.append(ctx.sent_data)
-             return ctx.respond('OK', content_type='text/plain')
+       @roamrs.route("/echo", roamrs.Method.POST)
+       async def post_echo(self, ctx):
+           self.phrases.append(ctx.sent_data)
+           return ctx.respond("OK", content_type="text/plain")
+
 
    server = roamrs.HTTPServer()
    server.load_cog(Echo())
@@ -74,9 +76,7 @@ Like so:
 
 .. code-block:: python3
 
-   server.unload_cog('Echo')
-
-               
+   server.unload_cog("Echo")
 Using Cogs
 ----------
 

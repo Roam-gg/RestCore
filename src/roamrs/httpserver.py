@@ -22,17 +22,13 @@ if not LOGGER.handlers:
     LOGGER.setLevel(logging.INFO)
     HANDLER = logging.StreamHandler(stdout)
     HANDLER.setLevel(logging.INFO)
-    FORMATTER = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    FORMATTER = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     HANDLER.setFormatter(FORMATTER)
     LOGGER.addHandler(HANDLER)
 
-__all__ = (
-    'HandlerExists',
-    'RouteDoesNotExist',
-    'Route',
-    'Router',
-    'HTTPServer'
-)
+__all__ = ("HandlerExists", "RouteDoesNotExist", "Route", "Router", "HTTPServer")
 
 
 class HandlerExists(Exception):
@@ -47,9 +43,11 @@ class HandlerExists(Exception):
         self.handlers = (old_handler, new_handler)
 
     def __repr__(self):
-        return (f'method {self.method} at path {self.path} is already used '
-                f'by handler {self.handlers[0]}, refusing to overwrite with '
-                f'handler {self.handlers[1]}.')
+        return (
+            f"method {self.method} at path {self.path} is already used "
+            f"by handler {self.handlers[0]}, refusing to overwrite with "
+            f"handler {self.handlers[1]}."
+        )
 
 
 class RouteDoesNotExist(Exception):
@@ -62,9 +60,7 @@ class RouteDoesNotExist(Exception):
         self.path_list = path_list
 
     def __repr__(self):
-        return 'route at path {path_list} does not exist.'
-
-
+        return "route at path {path_list} does not exist."
 
 
 class Route:
@@ -96,11 +92,11 @@ class Route:
       variable_child: A route can only have one variable route under it, this is where it is stored.
     """
 
-    __slots__ = ('path', 'handlers', 'children', 'variable', 'variable_child')
+    __slots__ = ("path", "handlers", "children", "variable", "variable_child")
 
     def __init__(self, path: str):
-        if path != '':
-            ROUTE_PATTERN = re.compile(r'([A-Za-z0-9]+)|{([A-Za-z0-9.\-_]+)}')
+        if path != "":
+            ROUTE_PATTERN = re.compile(r"([A-Za-z0-9]+)|{([A-Za-z0-9.\-_]+)}")
             match = ROUTE_PATTERN.match(path)
             if not match:
                 raise ValueError(f'Invalid path "{path}" passed to route')
@@ -125,7 +121,9 @@ class Route:
     def has_handlers(self):
         return any(map(lambda x: x is not None, self.handlers.values()))
 
-    async def __call__(self, path_list: List[str], method: Method, ctx: Context) -> web.Response:
+    async def __call__(
+        self, path_list: List[str], method: Method, ctx: Context
+    ) -> web.Response:
         # If the remaining path list is empty then we must want this route!
         if path_list == []:
             if self.handlers[method]:
@@ -133,8 +131,15 @@ class Route:
                 return await self.handlers[method](ctx)
             # uh oh! we don't have a handler for this method
             if self.has_handlers:
-                allowed_methods = list(map(lambda x: x.value, filter(lambda x: self.handlers[x] is not None, self.handlers)))
-                raise web.HTTPMethodNotAllowed(allowed_methods=allowed_methods, method=method.value)
+                allowed_methods = list(
+                    map(
+                        lambda x: x.value,
+                        filter(lambda x: self.handlers[x] is not None, self.handlers),
+                    )
+                )
+                raise web.HTTPMethodNotAllowed(
+                    allowed_methods=allowed_methods, method=method.value
+                )
             raise web.HTTPNotFound()
         # The path list isn't empty so the next section sould
         # be a child right?
@@ -150,10 +155,10 @@ class Route:
             return await self.variable_child(path_list[1:], method, ctx)
         # Wait there isn't a variable child either? Then what is the client
         # requesting?
-        LOGGER.info('Nowhere found for: %s', path_list)
+        LOGGER.info("Nowhere found for: %s", path_list)
         raise web.HTTPNotFound()
 
-    def add_route(self, path_list: List[str]) -> 'Route':
+    def add_route(self, path_list: List[str]) -> "Route":
         """Add a child route to this route. This creates any child routes
         nescesary to add the route you want to add.
 
@@ -182,7 +187,8 @@ class Route:
                 return child.add_route(path_list[1:])
         # Does the endpoint belong under our variable child?
         if self.variable_child and (
-                self.variable_child.path == path_list[0].strip('{}')):
+            self.variable_child.path == path_list[0].strip("{}")
+        ):
             return self.variable_child.add_route(path_list[1:])
         # No, so let's add a new child to put the child under
         new_child = Route(path_list[0])
@@ -192,7 +198,7 @@ class Route:
             else:
                 # The new child is variable but we already have a
                 # variable child. wait...that's illegal.
-                raise ValueError('Route already has a variable child')
+                raise ValueError("Route already has a variable child")
         else:
             self.children.append(new_child)
         return new_child.add_route(path_list[1:])
@@ -208,10 +214,8 @@ class Route:
         """
         if self.handlers[holder.method] is not None:
             raise HandlerExists(
-                self.path,
-                holder.method,
-                self.handlers[holder.method],
-                holder.func)
+                self.path, holder.method, self.handlers[holder.method], holder.func
+            )
         self.handlers[holder.method] = holder.func
 
     def remove_route(self, path_list: List[str]) -> bool:
@@ -221,7 +225,8 @@ class Route:
                     del self.children[i]
                     return True
                 if self.variable_child and (
-                        self.variable_child.path == path_list[0].strip('{}')):
+                    self.variable_child.path == path_list[0].strip("{}")
+                ):
                     self.variable_child = None
                     return True
             return False
@@ -235,11 +240,12 @@ class Route:
                         del self.children[i]
                 return r
         if self.variable_child and (
-                self.variable_child.path == path_list[0].strip('{}')):
+            self.variable_child.path == path_list[0].strip("{}")
+        ):
             return self.variable_child.remove_route(path_list[1:])
         return False
 
-    def get_route(self, path_list: List[str]) -> 'Route':
+    def get_route(self, path_list: List[str]) -> "Route":
         """Get a route from a list of endpoints
 
         Args:
@@ -278,7 +284,7 @@ class Router:
     """
 
     def __init__(self, services: Dict[str, object], extensions: Dict[str, Extension]):
-        self._base = Route('')
+        self._base = Route("")
         self._services = services
         self._extensions = extensions
         self._auth_services = [s for s in services.values() if s.is_auth_service]
@@ -290,34 +296,45 @@ class Router:
         if not self._auth_services:
             auth = True
         else:
+
             async def map_func(service):
-                return await service(request.headers.get('Authorization'))
+                return await service(request.headers.get("Authorization"))
+
             auth = await async_all(await async_map(map_func, self._auth_services))
         if auth:
-            LOGGER.info('Authorized request made to: %s method: %s', request.path, request.method)
+            LOGGER.info(
+                "Authorized request made to: %s method: %s",
+                request.path,
+                request.method,
+            )
             split_url = self.split_url(request.path)
-            if split_url[0] == '':
+            if split_url[0] == "":
                 if self._auth_services:
-                    user = await self._auth_services[0].get_user(request.headers.get('Authorization'))
+                    user = await self._auth_services[0].get_user(
+                        request.headers.get("Authorization")
+                    )
                 else:
                     user = None
-                if request.content_type == 'application/json':
+                if request.content_type == "application/json":
                     data = await request.json()
-                elif request.query_string != '':
+                elif request.query_string != "":
                     data = request.query
                 else:
-                    data = (await request.content.read()).decode('UTF-8')
+                    data = (await request.content.read()).decode("UTF-8")
                 context = Context(
                     raw_request=request,
                     user_data=user,
                     url_data={},
                     services=self._services,
                     extensions=self._extensions,
-                    sent_data=data)
+                    sent_data=data,
+                )
                 return await self._base(split_url[1:], Method(request.method), context)
             # this should never happen. How does our url not start at the root?
-            raise ValueError('wut?')
-        LOGGER.warning('Unauthorized request made to: %s method %s', request.path, request.method)
+            raise ValueError("wut?")
+        LOGGER.warning(
+            "Unauthorized request made to: %s method %s", request.path, request.method
+        )
         raise web.HTTPUnauthorized()
 
     def add_route(self, url: str) -> Route:
@@ -335,10 +352,10 @@ class Router:
             github
         """
         split_url = self.split_url(url)
-        if split_url[0] == '':
+        if split_url[0] == "":
             return self._base.add_route(split_url[1:])
         # this should never happen
-        raise ValueError('wut?')
+        raise ValueError("wut?")
 
     def remove_route(self, path: List[str]) -> bool:
         """Remove the route at the end of a route path,
@@ -374,19 +391,18 @@ class Router:
         This removes an ending slash but not the begginning one as this is the
         root route's path
         """
-        return url.rstrip('/').split('/')
+        return url.rstrip("/").split("/")
 
     def get_routes(self):
-        def recurse_through(r, l, start=''):
+        def recurse_through(r, l, start=""):
             l.append(start + r.path)
             for child in r.children:
-                recurse_through(child, l, start+r.path+'/')
+                recurse_through(child, l, start + r.path + "/")
             if r.variable_child:
-                recurse_through(r.variable_child, l, start+r.path+'/')
+                recurse_through(r.variable_child, l, start + r.path + "/")
             return l
+
         return recurse_through(self._base, [])
-
-
 
 
 class HTTPServer:
@@ -403,12 +419,14 @@ class HTTPServer:
     Attributes:
       router: The router that this server uses.
     """
-    def __init__(self,
-                 services: Dict[str,
-                                Service] = None,
-                 extensions: Dict[str, Extension] = None,
-                 host='0.0.0.0',
-                 port=8080):
+
+    def __init__(
+        self,
+        services: Dict[str, Service] = None,
+        extensions: Dict[str, Extension] = None,
+        host="0.0.0.0",
+        port=8080,
+    ):
         for name, ext in extensions.items():
             if not isinstance(ext, Extension):
                 raise TypeError(f"{name}: {ext} is not an instance of Extension")
@@ -436,7 +454,7 @@ class HTTPServer:
         for extension in self.extensions.values():
             await extension(self.services, self.extensions)
         await site.start()
-        LOGGER.info('Started HTTPServer on http://%s:%s/', self._host, self._port)
+        LOGGER.info("Started HTTPServer on http://%s:%s/", self._host, self._port)
         # Keep running the server until the exit coroutine is used
         await self._exit_event.wait()
 
@@ -483,11 +501,13 @@ class HTTPServer:
           path: The endpoint that the handler should serve
           method: The method that the handler should respond to
         """
+
         def route_def(func):
             if not iscoroutinefunction(func):
-                raise TypeError('handler for route must be a coroutine')
+                raise TypeError("handler for route must be a coroutine")
             holder = RouteHolder(func, path, method)
             self.router.add_handler(holder)
+
         return route_def
 
     def run(self, loop: asyncio.AbstractEventLoop = None):

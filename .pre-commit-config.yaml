@@ -1,0 +1,19 @@
+repos:
+-   repo: local
+    hooks:
+    - id: test
+      name: test
+      entry: make test
+      language: system
+      files: tests/__init__.py
+      stages: [push]
+-   repo: https://github.com/psf/black
+    rev: stable
+    hooks:
+    - id: black
+      language_version: python3.7
+-   repo: https://github.com/asottile/blacken-docs
+    rev: v1.3.0
+    hooks:
+    - id: blacken-docs
+      additional_dependencies: [black==19.3b0]

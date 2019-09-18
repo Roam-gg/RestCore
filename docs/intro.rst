@@ -42,8 +42,10 @@ You can register a route to a function using the server's  `add_route` decorator
 
     server = roamrs.HTTPServer()
 
-    @server.add_route('/hello', roamrs.Method.GET)
+
+    @server.add_route("/hello", roamrs.Method.GET)
     async def hello(ctx):
-        return ctx.respond('Hello!', content_type='text/plain')
+        return ctx.respond("Hello!", content_type="text/plain")
+
 
     server.run()
