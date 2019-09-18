@@ -82,26 +82,18 @@ class Route:
     any string passed to it and pass the strings value to the handlers
     'url_data' parameter.
 
-    Parameters
-    ----------
-    path : str
-        The endpoint that this route will be attributed to, this is only one
-        section of a uri.
+    Args:
+      path: The endpoint that this route will be attributed to, this is only one
+          section of a uri.
 
-    Attributes
-    ----------
-    path : str
-        The endpoint that this route is attributed to, this is only one section
-        of a uri.
-    variable : bool
-        If this route accepts any string instead of a specific one.
-    handlers : dict
-        A dictionary of handlers indexed by the method you can access them
-        with.
-    children : list of :class:`Route`
-        The list of routes that are under this route. They are the 'b' to this 'a'.
-    variable_child : :class:`Route`
-        A route can only have one variable route under it, this is where it is stored.
+    Attributes:
+      path: The endpoint that this route is attributed to, this is only one section
+          of a uri.
+      variable: If this route accepts any string instead of a specific one.
+      handlers: A dictionary of handlers indexed by the method you can access them
+          with.
+      children: The list of routes that are under this route. They are the 'b' to this 'a'.
+      variable_child: A route can only have one variable route under it, this is where it is stored.
     """
 
     __slots__ = ('path', 'handlers', 'children', 'variable', 'variable_child')
@@ -167,15 +159,11 @@ class Route:
 
         Don't know why you would do this, the router does this for you.
 
-        Parameters
-        ----------
-        path_list : list of str
-            The uri sections to add, the last one is the actual route you want
+        Args:
+          path_list: The uri sections to add, the last one is the actual route you want
             to add.
 
-        Returns
-        -------
-        :class:`Route`
+        Returns:
             The route you added
 
         Raises
@@ -212,21 +200,11 @@ class Route:
     def add_handler(self, holder: RouteHolder):
         """Add a handler to a route under a given method
 
-        Parameters
-        ----------
-        method : :class:`Method`
-            The method that this handler can be accessed with
-        handler : callable
-            The coroutine that we want to add
+        Args:
+          holder: The holder for the handler to add
 
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        :class:`HandlerExists`
-            A handler already exists under this method, you can't replace it.
+        Raises:
+          HandlerExists: A handler already exists under this method, you can't replace it.
         """
         if self.handlers[holder.method] is not None:
             raise HandlerExists(
@@ -264,19 +242,14 @@ class Route:
     def get_route(self, path_list: List[str]) -> 'Route':
         """Get a route from a list of endpoints
 
-        Parameters
-        ----------
-        path_list : list of str
-            The list of endpoints that we will find our route under
+        Args:
+          path_list: The list of endpoints that we will find our route under
 
-        Returns
-        -------
-        Route
-            The route requested
+        Returns:
+          Route: The route requested
 
-        Raises
-        ------
-        :class:`RouteDoesNotExist`
+        Raises:
+          RouteDoesNotExist: There is no route for this path.
         """
         if path_list == []:
             return self
@@ -295,17 +268,13 @@ class Router:
     You can either create your route yourself or let the HTTPServer do it for
     you.
 
-    Parameters
-    ----------
-    services
+    Args:
+      services
         The services that will available to handlers (and the router)
 
-    Attributes
-    ----------
-    base : :class:`Route`
-        The root route that all requests are directed to.
-    services : :class:`dict`
-        The services that are available to handlers (and the router)
+    Attributes:
+      base: The root route that all requests are directed to.
+      services: The services that are available to handlers (and the router)
     """
 
     def __init__(self, services: Dict[str, object], extensions: Dict[str, Extension]):
@@ -355,20 +324,14 @@ class Router:
         """Add a route, like the add route method of the :class:`Route`,
         except takes an url as one string like : '/a/b/c'
 
-        Parameters
-        ----------
-        url : str
-           The url to add a route for
+        Args:
+          url: The url to add a route for
 
-        Returns
-        -------
-        Route
-           The newly created route
+        Returns:
+          Route: The newly created route
 
-        Raises
-        ------
-        ValueError
-            This should never be raised, but if it is please raise an issue on
+        Raises:
+          ValueError: This should never be raised, but if it is please raise an issue on
             github
         """
         split_url = self.split_url(url)
@@ -381,15 +344,11 @@ class Router:
         """Remove the route at the end of a route path,
         if no children or handlers are left, the parent is also removed
 
-        Parameters
-        ----------
-        path : list of str
-           The path to remove the route from
+        Args:
+          path: The path to remove the route from
 
-        Returns
-        -------
-        bool
-           True if the route existed and was removed, false if it didn't exist
+        Returns:
+          bool: True if the route existed and was removed. False if it didn't exist
         """
         return self._base.remove_route(path)
 
@@ -397,16 +356,10 @@ class Router:
         """Add a handler to a route at a given url
         This method creates routes as needed to add the handler.
 
-        Parameters
-        ----------
-        url : str
-            The url add the handler under
+        Args:
+          url: str: The url add the handler under
         method
             When the request has the method `method` use this handler
-
-        Returns
-        -------
-        None
         """
         split_url = holder.split_path
         try:
@@ -440,24 +393,16 @@ class HTTPServer:
     """A class that runs an aiohttp server and contains all the server
     information.
 
-    Parameters
-    ----------
-    services
-        A list of services that will be available to the handlers and
+    Args:
+      services: A list of services that will be available to the handlers and
         the router.
-    router : :class:`Router`
-        The router to use for this server.
-    host : str
-        The IP address to listen to requests on '0.0.0.0' for all locations.
-    port : int
-        The port to listen to requests on.
+      router: The router to use for this server.
+      host: The IP address to listen to requests on '0.0.0.0' for all locations.
+      port: The port to listen to requests on.
 
-    Attributes
-    ----------
-    router : Router
-        The router that this server uses.
+    Attributes:
+      router: The router that this server uses.
     """
-
     def __init__(self,
                  services: Dict[str,
                                 Service] = None,
@@ -482,6 +427,7 @@ class HTTPServer:
         self.cogs = []
 
     async def __call__(self):
+        """Coroutine to start running the server, use this if you want fine control."""
         server = web.Server(self.router)
         runner = web.ServerRunner(server)
         await runner.setup()
@@ -502,19 +448,41 @@ class HTTPServer:
         self._exit_event.set()
 
     def load_cog(self, cog: Cog):
+        """Add a cog to the HTTPServer
+
+        Args:
+          cog: The cog to add to the HTTPServer
+        """
         cog.inject(self)
         self.cogs.append(cog)
 
     def unload_cog(self, cog_name: str):
+        """Remove a cog from the server
+
+        Args:
+          cog_name: The name of the cog to remove
+        """
+
         for cog in self.cogs:
             if cog.__cog_name__ == cog_name:
                 cog._eject(self)
                 break
 
     def get_routes(self):
+        """Get a list of all the routes that the server can serve
+
+        Returns:
+          List[str]: The routes that the server serves
+        """
         return self.router.get_routes()
 
     def add_route(self, path: str, method: Method):
+        """Decorator to add a handler to the server
+
+        Args:
+          path: The endpoint that the handler should serve
+          method: The method that the handler should respond to
+        """
         def route_def(func):
             if not iscoroutinefunction(func):
                 raise TypeError('handler for route must be a coroutine')
@@ -523,6 +491,11 @@ class HTTPServer:
         return route_def
 
     def run(self, loop: asyncio.AbstractEventLoop = None):
+        """Ease of use function to start a server. You should normally use this.
+
+        Args:
+          loop: The event loop to run the server in
+        """
         if not loop:
             loop = asyncio.get_event_loop()
         loop.run_until_complete(self())
