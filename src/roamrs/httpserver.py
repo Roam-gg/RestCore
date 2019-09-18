@@ -508,7 +508,7 @@ class HTTPServer:
                 break
 
     def get_routes(self):
-        return self.router.get_route_list()
+        return self.router.get_routes()
 
     def add_route(self, path: str, method: Method):
         def route_def(func):
