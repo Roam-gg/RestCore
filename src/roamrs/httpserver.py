@@ -517,3 +517,9 @@ class HTTPServer:
             holder = RouteHolder(func, path, method)
             self.router.add_handler(holder)
         return route_def
+
+    def run(self, loop: asyncio.AbstractEventLoop = None):
+        if not loop:
+            loop = asyncio.get_event_loop()
+        loop.run_until_complete(self())
+        loop.close()
