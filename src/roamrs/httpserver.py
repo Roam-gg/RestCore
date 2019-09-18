@@ -460,17 +460,21 @@ class HTTPServer:
 
     def __init__(self,
                  services: Dict[str,
-                                Service],
-                 extensions: Dict[str, Extension],
+                                Service] = None,
+                 extensions: Dict[str, Extension] = None,
                  host='0.0.0.0',
                  port=8080):
         for name, ext in extensions.items():
             if not isinstance(ext, Extension):
                 raise TypeError(f"{name}: {ext} is not an instance of Extension")
-        self.extensions = extensions
+        if extensions:
+            self.extensions = extensions
+        else:
+            self.extensions = {}
         self.services = {}
-        for name, service in services.items():
-            self.services[name] = service(self.extensions, self.services)
+        if services:
+            for name, service in services.items():
+                self.services[name] = service(self.extensions, self.services)
         self.router = Router(self.services, self.extensions)
         self._host = host
         self._port = port
